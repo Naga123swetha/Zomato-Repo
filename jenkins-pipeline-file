@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
+    environment {
+        SCANNER_HOME=tool 'mysonar'
+    }
+    stages {
+        stage ("clean workspace") {
+            steps {
+                cleanWs()
+            }
+        }
+        stage ("Checkout from Git") {
+            steps {
+                git branch: 'main', url: 'https://github.com/devops0014/Zomato-Repo.git'
+            }
+        }
+        stage("Sonarqube Analysis") {
+            steps{
+                withSonarQubeEnv('mysonar') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato '''
+                }
+            }
+        }
+        stage("Quality Gates"){
+            steps{
+                script{
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                sh 'npm install'
+            }
+        }
+        stage("OWASP"){
+            steps{
+                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+            }
+        stage ("TRIVY FS SCAN") {
+            steps {
+                sh "trivy fs . > trivyfs.txt"
+            }
+        }
+        stage("Docker Build & Push"){
+            steps{
+                script{
+                    withDockerRegistry(credentialsId: 'Dockerhub') {
+                        sh 'docker build -t image1 .'
+                        sh "docker tag image1 swethareddy29/myrepo:mydockerimage"
+                        sh "docker push swethareddy29/myrepo:mydockerimage"
+                    }
+                }
+                }
+            }
+            stage ("TRIVY") {
+            steps {
+                sh 'trivy image swethareddy29/myrepo:mydockerimage'
+            }
+        }
+        stage ("Deploy to container") {
+            steps {
+                sh 'docker run -d --name zomato -p 3000:3000 swethareddy29/myrepo:mydockerimage'
+            }
+        }
+        }
+    }
