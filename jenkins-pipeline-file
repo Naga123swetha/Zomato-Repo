@@ -26,24 +26,24 @@ pipeline {
                 }
             }
         }
-        stage("Quality Gates"){
-            steps{
-                script{
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
+        stage ("quality gate") {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
                 }
             }
         }
-        stage("Build"){
-            steps{
+        stage ("Install dependencies") {
+            steps {
                 sh 'npm install'
             }
         }
-        stage("OWASP"){
-            steps{
-                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-check'
+        stage ("OWASP FS SCAN") {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
-            }
+        }
         stage ("TRIVY FS SCAN") {
             steps {
                 sh "trivy fs . > trivyfs.txt"
@@ -52,23 +52,23 @@ pipeline {
         stage("Docker Build & Push"){
             steps{
                 script{
-                    withDockerRegistry(credentialsId: 'Dockerhub') {
+                    withDockerRegistry(credentialsId: 'dockerhub') {
                         sh 'docker build -t image1 .'
-                        sh "docker tag image1 swethareddy29/myrepo:mydockerimage"
-                        sh "docker push swethareddy29/myrepo:mydockerimage"
+                        sh "docker tag image1 swethareddy29/loki:mydockerimage"
+                        sh "docker push swethareddy29/loki:mydockerimage"
                     }
                 }
-                }
             }
-            stage ("TRIVY") {
+        }
+        stage ("TRIVY") {
             steps {
-                sh 'trivy image swethareddy29/myrepo:mydockerimage'
+                sh 'trivy image swethareddy29/loki:mydockerimage'
             }
         }
         stage ("Deploy to container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 swethareddy29/myrepo:mydockerimage'
+                sh 'docker run -d --name zomato -p 3000:3000 swethareddy29/loki:mydockerimage'
             }
         }
-        }
     }
+}
